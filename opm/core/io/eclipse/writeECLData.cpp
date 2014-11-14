@@ -90,6 +90,7 @@ namespace Opm
                     const int current_step,
                     const double current_time,
                     const boost::posix_time::ptime& current_date_time,
+                    const int num_wells,
                     const std::string& output_dir,
                     const std::string& base_name) {
 
@@ -119,7 +120,7 @@ namespace Opm
     else
       rst_file = ecl_rst_file_open_write( filename );
 
-    ecl_rst_file_fwrite_header( rst_file , current_step , date , days , nx , ny , nz , nactive , phases );
+    ecl_rst_file_fwrite_header( rst_file , current_step , date , days , num_wells, nx , ny , nz , nactive , phases );
     ecl_rst_file_start_solution( rst_file );
 
     {
