@@ -39,6 +39,7 @@
 #include <opm/parser/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/parser/eclipse/Utility/SpecgridWrapper.hpp>
 #include <opm/parser/eclipse/Utility/WelspecsWrapper.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 
 #include <boost/algorithm/string/case_conv.hpp> // to_upper_copy
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -275,6 +276,7 @@ public:
                      int nx,
                      int ny,
                      int nz,
+                     int numWells,
                      const PhaseUsage uses)
     {
         ecl_rst_file_fwrite_header(restartFileHandle_,
@@ -282,6 +284,7 @@ public:
                                    timer.currentPosixTime(),
                                    Opm::unit::convert::to(timer.simulationTimeElapsed(),
                                                           Opm::unit::day),
+                                   numWells,
                                    nx, ny, nz,
                                    numCells,
                                    ertPhaseMask(uses));
@@ -935,6 +938,7 @@ void EclipseWriter::writeTimeStep(const SimulatorTimer& timer,
                               cartesianSize_[0],
                               cartesianSize_[1],
                               cartesianSize_[2],
+                              eclipseState_->getSchedule()->numWells(),
                               phaseUsage_);
     EclipseWriterDetails::Solution sol(restartHandle);
 
