@@ -27,7 +27,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include <opm/core/io/eclipse/EclipseWriter.hpp>
-#include <opm/core/io/eclipse/EclipseWriter.hpp>
 #include <opm/core/grid/GridManager.hpp>
 #include <opm/core/props/phaseUsageFromDeck.hpp>
 #include <opm/core/simulator/BlackoilState.hpp>
@@ -41,44 +40,75 @@
 
 // ERT stuff
 #include <ert/ecl/ecl_kw.h>
-#include <ert/ecl/ecl_endian_flip.h>
-#include <ert/ecl/fortio.h>
-
+#include <ert/ecl/ecl_file.h>
+#include <ert/ecl/ecl_kw_magic.h>
 
 #include <string.h>
 #include <memory>
 
-std::shared_ptr<Opm::EclipseWriter> eclWriter;
-std::shared_ptr<Opm::SimulatorTimer> simTimer;
-std::shared_ptr<const Opm::Deck> deck;
-std::shared_ptr<Opm::EclipseState> eclipseState;
-std::shared_ptr<Opm::GridManager> ourFineGridManagerPtr;
-std::shared_ptr<Opm::BlackoilState> blackoilState;
-std::shared_ptr<Opm::WellState> wellState;
 
-void createEclipseWriter(const char *deckString)
-{
 
+int readNumWellsFromRestartFile(const std::string&  filename) {
+  ecl_file_type * restart_file = ecl_file_open(filename.c_str(), 0);
+  ecl_file_load_all(restart_file);
+
+  ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, 1);
+  int numwells = ecl_kw_iget_int(intehead_kw, INTEHEAD_NWELLS_INDEX);;
+
+  //ecl_kw_free(intehead_kw);
+  ecl_file_close(restart_file);
+
+  return numwells;
 }
 
-void readDataFile(){
 
-}
 
 BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
 {
-    Opm::ParserPtr parser(new Opm::Parser());
     std::string file = "testBlackoilState3.DATA";
+    std::string restart_file = "TESTBLACKOILSTATE3.UNRST";
+
+    Opm::ParserPtr parser(new Opm::Parser());
     Opm::ParserLogPtr parserLog(new Opm::ParserLog);
     Opm::DeckConstPtr deck = parser->parseFile(file, true, parserLog);
     Opm::Schedule sched( deck );
-    std::cerr << "Wells: " << sched.numWells() << std::endl;
-    BOOST_ASSERT(deck!=NULL);
-
-    //createEclipseWriter(deckString);
-
-    //test
-    //eclWriter->writeInit(*simTimer);
+    int numWellsReadFromScheduleFile = sched.numWells();
 
 
+    std::shared_ptr<Opm::EclipseState> eclipseState(new Opm::EclipseState(deck));
+
+    Opm::parameter::ParameterGroup params;
+    params.insertParameter("deck_filename", "testBlackoilState3.DATA");
+
+    const Opm::PhaseUsage phaseUsage = Opm::phaseUsageFromDeck(deck);
+
+    std::shared_ptr<Opm::EclipseWriter> eclWriter(new Opm::EclipseWriter(params,
+                                                                         eclipseState,
+                                                                         phaseUsage,
+                                                                         eclipseState->getEclipseGrid()->getCartesianSize(),
+                                                                         0));
+
+    //std::shared_ptr<Opm::SimulatorTimer> simTimer = std::make_shared<Opm::SimulatorTimer>();
+    std::shared_ptr<Opm::SimulatorTimer> simTimer( new Opm::SimulatorTimer() );
+    simTimer->init(eclipseState->getSchedule()->getTimeMap());
+
+    auto eclGrid = eclipseState->getEclipseGrid();
+
+    Opm::EclipseGridConstPtr constEclGrid(eclGrid);
+    std::shared_ptr<Opm::GridManager> ourFineGridManagerPtr(new Opm::GridManager(constEclGrid));
+
+
+    eclWriter->writeInit(*simTimer);
+
+
+    for (; simTimer->currentStepNum() < simTimer->numSteps(); ++ (*simTimer)) {
+        std::shared_ptr<Opm::BlackoilState> blackoilState(new Opm::BlackoilState);
+        blackoilState->init(*ourFineGridManagerPtr->c_grid(), 3);
+        std::shared_ptr<Opm::WellState> wellState(new Opm::WellState());
+        wellState->init(0, *blackoilState);
+        eclWriter->writeTimeStep(*simTimer, *blackoilState, *wellState);
+    }
+
+
+    BOOST_ASSERT(numWellsReadFromScheduleFile == readNumWellsFromRestartFile(restart_file));
 }
