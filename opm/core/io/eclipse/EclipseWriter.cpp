@@ -35,6 +35,7 @@
 #include <opm/core/utility/parameters/ParameterGroup.hpp>
 #include <opm/core/utility/Units.hpp>
 #include <opm/core/wells.h> // WellType
+#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
 
 #include <opm/parser/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/parser/eclipse/Utility/SpecgridWrapper.hpp>
@@ -137,7 +138,7 @@ void extractFromStripedData(std::vector<double> &data,
 }
 
 /// Convert OPM phase usage to ERT bitmask
-int ertPhaseMask(const PhaseUsage uses)
+static int ertPhaseMask(const PhaseUsage uses)
 {
     return (uses.phase_used[BlackoilPhases::Liquid] ? ECL_OIL_PHASE : 0)
         | (uses.phase_used[BlackoilPhases::Aqua] ? ECL_WATER_PHASE : 0)
@@ -168,6 +169,11 @@ public:
         : ertHandle_(0)
     { set(name, data); }
 
+    Keyword(const std::string& name,
+            const std::vector<const char*>& data)
+        : ertHandle_(0)
+    {set(name, data); }
+
     ~Keyword()
     {
         if (ertHandle_)
@@ -177,9 +183,11 @@ public:
     template <class DataElementType>
     void set(const std::string name, const std::vector<DataElementType>& data)
     {
+
         if(ertHandle_) {
             ecl_kw_free(ertHandle_);
         }
+
 
         ertHandle_ = ecl_kw_alloc(name.c_str(),
                                   data.size(),
@@ -189,10 +197,30 @@ public:
         const int numEntries = data.size();
 
         // fill it with values
+
         T* target = static_cast<T*>(ecl_kw_get_ptr(ertHandle()));
         for (int i = 0; i < numEntries; ++i) {
             target[i] = static_cast<T>(data[i]);
         }
+    }
+
+    void set(const std::string name, const std::vector<const char *>& data)
+    {
+      if(ertHandle_) {
+          ecl_kw_free(ertHandle_);
+      }
+
+
+      ertHandle_ = ecl_kw_alloc(name.c_str(),
+                                data.size(),
+                                ertType_());
+
+      // number of elements to take
+      const int numEntries = data.size();
+      for (int i = 0; i < numEntries; ++i) {
+          ecl_kw_iset_char_ptr( ertHandle_, i, data[i]);
+     }
+
     }
 
     ecl_kw_type *ertHandle() const
@@ -207,6 +235,9 @@ private:
         { return ECL_DOUBLE_TYPE; }
         if (std::is_same<T, int>::value)
         { return ECL_INT_TYPE; }
+        if (std::is_same<T, const char *>::value)
+        { return ECL_CHAR_TYPE; }
+
 
         OPM_THROW(std::logic_error,
                   "Unhandled type for data elements in EclipseWriterDetails::Keyword");
@@ -246,6 +277,10 @@ private:
 class Restart : private boost::noncopyable
 {
 public:
+    static const int NIWELZ = 11;
+    static const int NZWELZ = 3;
+    static const int NICONZ = 14;
+
     Restart(const std::string& outputDir,
             const std::string& baseName,
             int reportStepIdx)
@@ -264,6 +299,106 @@ public:
         }
     }
 
+    template <typename T>
+    void add_kw(const Keyword<T>& kw)
+    { ecl_rst_file_add_kw(restartFileHandle_, kw.ertHandle()); }
+
+
+    void getRestartFileIwelData(std::vector<int>& iwel_data, size_t currentStep, WellConstPtr well_ptr) const {
+
+      iwel_data.push_back(well_ptr->getHeadI()); // item 1 - gridhead I value
+      iwel_data.push_back(well_ptr->getHeadJ()); // item 2 - gridhead J value
+      iwel_data.push_back(0);                // item 3 - gridhead K value
+      iwel_data.push_back(0);                // item 4 - undefined - 0
+
+      CompletionSetConstPtr completions_ptr = well_ptr->getCompletions(currentStep);
+      int num_completions = completions_ptr->size();
+      iwel_data.push_back(num_completions);      // item 5 - number of completions
+      iwel_data.push_back(1);                    // item 6 - for now, set all group indexes to 1
+
+
+      // item 7 - well type 1 = producer, 2 = oil injection, 3 = water injection, 4 = gas injection
+      if (well_ptr->isProducer(currentStep)) {
+        iwel_data.push_back(1);
+      } else {
+          WellInjectionProperties well_injection_props = well_ptr->getInjectionProperties(currentStep);
+
+          switch (well_injection_props.injectorType) {
+            case 1 :  // WATER injection
+              iwel_data.push_back(3);
+              break;
+            case 2 :  // GAS injection
+              iwel_data.push_back(4);
+              break;
+            case 3 : // OIL injection
+              iwel_data.push_back(2);
+            default:
+               iwel_data.push_back(0);
+          }
+      }
+
+      iwel_data.push_back(0);                    // item 8  -  undefined  - 0
+      iwel_data.push_back(0);                    // item 9  -  undefined  - 0
+      iwel_data.push_back(0);                    // item 10 -  undefined  - 0
+
+      if (well_ptr->getStatus(currentStep)== WellCommon::StatusEnum::SHUT) {
+        iwel_data.push_back(0);
+      } else { // OPEN = 1, STOP = 2, AUTO = 4
+        iwel_data.push_back(1);//OPEN
+      }
+
+
+    }
+
+
+    void getRestartFileZwelData(std::vector<const char*>& zwel_data, size_t currentstep, WellConstPtr well_ptr) const {
+      zwel_data.push_back(well_ptr->name().c_str());
+      zwel_data.push_back("");
+      zwel_data.push_back("");
+    }
+
+
+    void getRestartFileIconData(std::vector<int>& icon_data, size_t currentstep, int ncwmax, WellConstPtr well_ptr) const {
+      CompletionSetConstPtr completions_set_ptr = well_ptr->getCompletions(currentstep);
+
+      int zero_pad = ncwmax - completions_set_ptr->size();
+
+
+      for (int i = 0; i < completions_set_ptr->size(); ++i) {
+        CompletionConstPtr completion_ptr = completions_set_ptr->get(i);
+        icon_data.push_back(1);
+        icon_data.push_back(completion_ptr->getI());
+        icon_data.push_back(completion_ptr->getJ());
+        icon_data.push_back(completion_ptr->getK());
+        icon_data.push_back(0);
+
+        CompletionStateEnum completion_state = completion_ptr->getState();
+        if (completion_state == WellCommon::OPEN) {
+          icon_data.push_back(1);
+        } else {
+          icon_data.push_back(0);
+        }
+
+        icon_data.push_back(0);
+        icon_data.push_back(0);
+        icon_data.push_back(0);
+        icon_data.push_back(0);
+        icon_data.push_back(0);
+        icon_data.push_back(0);
+        icon_data.push_back(0);
+
+        icon_data.push_back((int)completion_ptr->getDirection());
+
+      }
+
+      for(int i=0;i<zero_pad;i++){
+        icon_data.insert(icon_data.end(), Restart::NICONZ, 0);
+      }
+
+    }
+
+
+
     ~Restart()
     {
         free(restartFileName_);
@@ -272,22 +407,17 @@ public:
 
     void writeHeader(const SimulatorTimer& timer,
                      int reportStepIdx,
-                     int numCells,
-                     int nx,
-                     int ny,
-                     int nz,
-                     int numWells,
-                     const PhaseUsage uses)
+                     intehead_data data)
     {
-        ecl_rst_file_fwrite_header(restartFileHandle_,
-                                   reportStepIdx,
-                                   timer.currentPosixTime(),
-                                   Opm::unit::convert::to(timer.simulationTimeElapsed(),
-                                                          Opm::unit::day),
-                                   numWells,
-                                   nx, ny, nz,
-                                   numCells,
-                                   ertPhaseMask(uses));
+
+      int days = Opm::unit::convert::to(timer.simulationTimeElapsed(), Opm::unit::day);
+
+
+      ecl_rst_file_fwrite_header(restartFileHandle_,
+                                 reportStepIdx,
+                                 Opm::unit::convert::to(timer.simulationTimeElapsed(), Opm::unit::day),
+                                 data);
+
     }
 
     ecl_rst_file_type *ertHandle() const
@@ -915,6 +1045,7 @@ void EclipseWriter::writeInit(const SimulatorTimer &timer)
     summary_->addAllWells(eclipseState_, phaseUsage_);
 }
 
+
 void EclipseWriter::writeTimeStep(const SimulatorTimer& timer,
                                   const SimulatorState& reservoirState,
                                   const WellState& wellState)
@@ -930,16 +1061,56 @@ void EclipseWriter::writeTimeStep(const SimulatorTimer& timer,
         return;
     }
 
-    // start writing to files
+
+    std::vector<WellConstPtr> wells_ptr = eclipseState_->getSchedule()->getWells(timer.currentStepNum());
+    std::vector<int>         iwell_data;
+    std::vector<const char*> zwell_data;
+    std::vector<int>         icon_data;
+
+    intehead_data ih_data;
+    ih_data.date     = timer.currentPosixTime();
+    ih_data.nactive  = numCells_;
+    ih_data.nx       = cartesianSize_[0];
+    ih_data.ny       = cartesianSize_[1];
+    ih_data.nz       = cartesianSize_[2];
+    ih_data.numwells = eclipseState_->getSchedule()->numWells(timer.currentStepNum());
+    ih_data.niwelz   = 0;
+    ih_data.nzwelz   = 0;
+    ih_data.niconz   = 0;
+    ih_data.ncwmax   = 0;
+    ih_data.phases   = Opm::EclipseWriterDetails::ertPhaseMask(phaseUsage_);
+
     EclipseWriterDetails::Restart restartHandle(outputDir_, baseName_, reportStepIdx_);
+
+    for (std::vector<WellConstPtr>::const_iterator c_iter = wells_ptr.begin(); c_iter != wells_ptr.end(); ++c_iter) {
+      WellConstPtr well_ptr = *c_iter;
+
+      ih_data.ncwmax = eclipseState_->getSchedule()->getMaxNumberOfCompletionsForWells(timer.currentStepNum());
+      restartHandle.getRestartFileIwelData(iwell_data, timer.currentStepNum(), well_ptr);
+      restartHandle.getRestartFileZwelData(zwell_data, timer.currentStepNum(), well_ptr);
+      restartHandle.getRestartFileIconData(icon_data, timer.currentStepNum(), ih_data.ncwmax, well_ptr);
+
+      ih_data.niwelz = EclipseWriterDetails::Restart::NIWELZ;
+      ih_data.nzwelz = EclipseWriterDetails::Restart::NZWELZ;
+      ih_data.niconz = EclipseWriterDetails::Restart::NICONZ;
+    }
+
+
     restartHandle.writeHeader(timer,
                               reportStepIdx_,
-                              numCells_,
-                              cartesianSize_[0],
-                              cartesianSize_[1],
-                              cartesianSize_[2],
-                              eclipseState_->getSchedule()->numWells(),
-                              phaseUsage_);
+                              ih_data);
+
+    if(ih_data.niwelz!=0){
+      restartHandle.add_kw(EclipseWriterDetails::Keyword<int>(IWEL_KW, iwell_data));
+    }
+    if(ih_data.nzwelz!=0){
+      restartHandle.add_kw(EclipseWriterDetails::Keyword<const char *>(ZWEL_KW, zwell_data));
+    }
+    if(ih_data.niconz!=0){
+      restartHandle.add_kw(EclipseWriterDetails::Keyword<int>(ICON_KW, icon_data));
+    }
+
+
     EclipseWriterDetails::Solution sol(restartHandle);
 
     // write out the pressure of the reference phase (whatever phase that is...). this is
@@ -968,6 +1139,7 @@ void EclipseWriter::writeTimeStep(const SimulatorTimer& timer,
             sol.add(EclipseWriterDetails::Keyword<float>(EclipseWriterDetails::saturationKeywordNames[phase], tmp));
         }
     }
+
 
     /* Summary variables (well reporting) */
     // TODO: instead of writing the header (smspec) every time, it should

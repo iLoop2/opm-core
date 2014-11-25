@@ -48,14 +48,13 @@
 
 
 
-int readNumWellsFromRestartFile(const std::string&  filename) {
+int readNumWellsFromRestartFile(const std::string&  filename, int timestep) {
   ecl_file_type * restart_file = ecl_file_open(filename.c_str(), 0);
   ecl_file_load_all(restart_file);
 
-  ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, 1);
-  int numwells = ecl_kw_iget_int(intehead_kw, INTEHEAD_NWELLS_INDEX);;
+  ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, timestep);
+  int numwells = ecl_kw_iget_int(intehead_kw, INTEHEAD_NWELLS_INDEX);
 
-  //ecl_kw_free(intehead_kw);
   ecl_file_close(restart_file);
 
   return numwells;
@@ -65,20 +64,18 @@ int readNumWellsFromRestartFile(const std::string&  filename) {
 
 BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
 {
-    std::string file = "testBlackoilState3.DATA";
-    std::string restart_file = "TESTBLACKOILSTATE3.UNRST";
+    std::string file = "testBlackoilState4.DATA";
+    std::string restart_file = "TESTBLACKOILSTATE4.UNRST";
+
 
     Opm::ParserPtr parser(new Opm::Parser());
     Opm::ParserLogPtr parserLog(new Opm::ParserLog);
     Opm::DeckConstPtr deck = parser->parseFile(file, true, parserLog);
-    Opm::Schedule sched( deck );
-    int numWellsReadFromScheduleFile = sched.numWells();
-
 
     std::shared_ptr<Opm::EclipseState> eclipseState(new Opm::EclipseState(deck));
 
     Opm::parameter::ParameterGroup params;
-    params.insertParameter("deck_filename", "testBlackoilState3.DATA");
+    params.insertParameter("deck_filename", file);
 
     const Opm::PhaseUsage phaseUsage = Opm::phaseUsageFromDeck(deck);
 
@@ -88,7 +85,6 @@ BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
                                                                          eclipseState->getEclipseGrid()->getCartesianSize(),
                                                                          0));
 
-    //std::shared_ptr<Opm::SimulatorTimer> simTimer = std::make_shared<Opm::SimulatorTimer>();
     std::shared_ptr<Opm::SimulatorTimer> simTimer( new Opm::SimulatorTimer() );
     simTimer->init(eclipseState->getSchedule()->getTimeMap());
 
@@ -110,5 +106,7 @@ BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
     }
 
 
-    BOOST_ASSERT(numWellsReadFromScheduleFile == readNumWellsFromRestartFile(restart_file));
+    size_t timestep = 0;
+    int numWellsReadFromScheduleFile = eclipseState->getSchedule()->numWells(timestep);
+    BOOST_ASSERT(numWellsReadFromScheduleFile == readNumWellsFromRestartFile(restart_file, timestep));
 }
