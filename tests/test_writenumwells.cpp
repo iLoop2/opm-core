@@ -96,17 +96,35 @@ BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
 
     eclWriter->writeInit(*simTimer);
 
+    std::cout << "time map " << eclipseState->getSchedule()->getTimeMap()->numTimesteps() << std::endl;
 
-    for (; simTimer->currentStepNum() < simTimer->numSteps(); ++ (*simTimer)) {
-        std::shared_ptr<Opm::BlackoilState> blackoilState(new Opm::BlackoilState);
-        blackoilState->init(*ourFineGridManagerPtr->c_grid(), 3);
-        std::shared_ptr<Opm::WellState> wellState(new Opm::WellState());
-        wellState->init(0, *blackoilState);
-        eclWriter->writeTimeStep(*simTimer, *blackoilState, *wellState);
+    std::cout << "Numsteps " << simTimer->numSteps() << std::endl;
+
+    int count = 0;
+
+    int countTimeStep = eclipseState->getSchedule()->getTimeMap()->numTimesteps();
+
+    std::shared_ptr<Opm::BlackoilState> blackoilState(new Opm::BlackoilState);
+    blackoilState->init(*ourFineGridManagerPtr->c_grid(), 3);
+    std::shared_ptr<Opm::WellState> wellState(new Opm::WellState());
+    wellState->init(0, *blackoilState);
+
+    for(int i=0; i <= countTimeStep; ++i){
+      simTimer->setCurrentStepNum(i);
+      eclWriter->writeTimeStep(*simTimer, *blackoilState, *wellState);
     }
 
+    /*
+    for (; simTimer->currentStepNum() < simTimer->numSteps(); ++ (*simTimer)) {
 
-    size_t timestep = 0;
-    int numWellsReadFromScheduleFile = eclipseState->getSchedule()->numWells(timestep);
-    BOOST_ASSERT(numWellsReadFromScheduleFile == readNumWellsFromRestartFile(restart_file, timestep));
+        eclWriter->writeTimeStep(*simTimer, *blackoilState, *wellState);
+       /* if(count==3){
+            eclWriter->writeTimeStep(*simTimer, *blackoilState, *wellState);
+          }
+    }*/
+
+
+//    size_t timestep = 0;
+//    int numWellsReadFromScheduleFile = eclipseState->getSchedule()->numWells(timestep);
+  //  BOOST_ASSERT(numWellsReadFromScheduleFile == readNumWellsFromRestartFile(restart_file, timestep));
 }

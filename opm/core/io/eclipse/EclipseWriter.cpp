@@ -1123,7 +1123,7 @@ void EclipseWriter::writeTimeStep(const SimulatorTimer& timer,
     std::vector<double> tmp = reservoirState.pressure();
     EclipseWriterDetails::convertFromSiTo(tmp, deckToSiPressure_);
 
-    sol.add(EclipseWriterDetails::Keyword<float>("PRESSURE", tmp));
+    //sol.add(EclipseWriterDetails::Keyword<float>("PRESSURE", tmp));
 
     for (int phase = 0; phase != BlackoilPhases::MaxNumPhases; ++phase) {
         // Eclipse never writes the oil saturation, so all post-processors
