@@ -149,7 +149,7 @@ list (APPEND MAIN_SOURCE_FILES
 # originally generated with the command:
 # find tests -name '*.cpp' -a ! -wholename '*/not-unit/*' -printf '\t%p\n' | sort
 list (APPEND TEST_SOURCE_FILES
-        tests/test_writenumwells.cpp
+  tests/test_writenumwells.cpp
 	tests/test_EclipseWriter.cpp
 	tests/test_compressedpropertyaccess.cpp
 	tests/test_spline.cpp
@@ -204,7 +204,6 @@ list (APPEND TEST_DATA_FILES
 	tests/testBlackoilState1.DATA
 	tests/testBlackoilState2.DATA
   tests/testBlackoilState3.DATA
-  tests/target.SCH
 	tests/wells_manager_data.data
 	tests/wells_manager_data_expanded.data
 	tests/wells_manager_data_wellSTOP.data
