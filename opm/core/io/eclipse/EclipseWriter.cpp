@@ -24,6 +24,8 @@
 
 #include <opm/core/props/BlackoilPhases.hpp>
 #include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 #include <opm/core/grid.h>
 #include <opm/core/grid/cpgpreprocess/preprocess.h>
 #include <opm/core/props/phaseUsageFromDeck.hpp>
@@ -35,12 +37,10 @@
 #include <opm/core/utility/parameters/ParameterGroup.hpp>
 #include <opm/core/utility/Units.hpp>
 #include <opm/core/wells.h> // WellType
-#include <opm/parser/eclipse/EclipseState/Schedule/Well.hpp>
 
 #include <opm/parser/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/parser/eclipse/Utility/SpecgridWrapper.hpp>
 #include <opm/parser/eclipse/Utility/WelspecsWrapper.hpp>
-#include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 
 #include <boost/algorithm/string/case_conv.hpp> // to_upper_copy
 #include <boost/date_time/posix_time/posix_time.hpp>
