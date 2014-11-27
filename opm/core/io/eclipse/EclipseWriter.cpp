@@ -1089,7 +1089,7 @@ void EclipseWriter::writeTimeStep(const SimulatorTimer& timer,
     for (std::vector<WellConstPtr>::const_iterator c_iter = wells_ptr.begin(); c_iter != wells_ptr.end(); ++c_iter) {
       WellConstPtr well_ptr = *c_iter;
 
-      ih_data.ncwmax = eclipseState_->getSchedule()->getMaxNumberOfCompletionsForWells(timer.currentStepNum());
+      ih_data.ncwmax = eclipseState_->getSchedule()->getMaxNumCompletionsForWells(timer.currentStepNum());
       restartHandle.getRestartFileIwelData(iwell_data, timer.currentStepNum(), well_ptr);
       restartHandle.getRestartFileZwelData(zwell_data, timer.currentStepNum(), well_ptr);
       restartHandle.getRestartFileIconData(icon_data, timer.currentStepNum(), ih_data.ncwmax, well_ptr);
@@ -1160,13 +1160,11 @@ EclipseWriter::EclipseWriter(const parameter::ParameterGroup& params,
                              Opm::EclipseStateConstPtr eclipseState,
                              const Opm::PhaseUsage &phaseUsage,
                              int numCells,
-                             const int* compressedToCartesianCellIdx,
-                             std::string outputDir)
+                             const int* compressedToCartesianCellIdx)
     : eclipseState_(eclipseState)
     , numCells_(numCells)
     , compressedToCartesianCellIdx_(compressedToCartesianCellIdx)
     , phaseUsage_(phaseUsage)
-    , outputDir_(outputDir)
 {
     const auto eclGrid = eclipseState->getEclipseGrid();
     cartesianSize_[0] = eclGrid->getNX();

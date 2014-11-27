@@ -151,10 +151,6 @@ namespace Opm
     /// Return true if op++() has been called numSteps() times.
     bool SimulatorTimer::done() const
     {
-        if (int(timesteps_.size()) == current_step_) {
-            std::cout << "SIMULATORTIMER DONE" << std::endl;
-        }
-
         return int(timesteps_.size()) == current_step_;
     }
 
