@@ -109,6 +109,43 @@ void  verifyIconData(const std::string&  filename, int timestep) {
 
 
 
+std::shared_ptr<Opm::BlackoilState> createBlackOilState(Opm::EclipseGridConstPtr eclGrid) {
+
+  std::shared_ptr<Opm::GridManager> ourFineGridManagerPtr(new Opm::GridManager(eclGrid));
+  std::shared_ptr<Opm::BlackoilState> blackoilState(new Opm::BlackoilState);
+  blackoilState->init(*ourFineGridManagerPtr->c_grid(), 3);
+
+  return blackoilState;
+}
+
+
+Opm::DeckConstPtr createDeck(const std::string& eclipse_data_filename) {
+  Opm::ParserPtr parser(new Opm::Parser());
+  Opm::ParserLogPtr parserLog(new Opm::ParserLog);
+  Opm::DeckConstPtr deck = parser->parseFile(eclipse_data_filename, true, parserLog);
+
+  return deck;
+}
+
+
+Opm::EclipseWriterPtr createEclipseWriter(Opm::DeckConstPtr deck,
+                                          Opm::EclipseStatePtr eclipseState,
+                                          std::string& eclipse_data_filename) {
+
+  Opm::parameter::ParameterGroup params;
+  params.insertParameter("deck_filename", eclipse_data_filename);
+
+  const Opm::PhaseUsage phaseUsage = Opm::phaseUsageFromDeck(deck);
+
+  Opm::EclipseWriterPtr eclWriter(new Opm::EclipseWriter(params,
+                                                         eclipseState,
+                                                         phaseUsage,
+                                                         eclipseState->getEclipseGrid()->getCartesianSize(),
+                                                         0));
+  return eclWriter;
+}
+
+
 BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
 {
     std::string eclipse_data_filename    = "testBlackoilState3.DATA";
@@ -117,45 +154,27 @@ BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
     test_work_area_type * test_area = test_work_area_alloc("TEST_EclipseWriteNumWells");
     test_work_area_copy_file(test_area, eclipse_data_filename.c_str());
 
-    Opm::ParserPtr parser(new Opm::Parser());
-    Opm::ParserLogPtr parserLog(new Opm::ParserLog);
-    Opm::DeckConstPtr deck = parser->parseFile(eclipse_data_filename, true, parserLog);
-
-    std::shared_ptr<Opm::EclipseState> eclipseState(new Opm::EclipseState(deck));
-
-    Opm::parameter::ParameterGroup params;
-    params.insertParameter("deck_filename", eclipse_data_filename);
-
-    const Opm::PhaseUsage phaseUsage = Opm::phaseUsageFromDeck(deck);
-
-    std::shared_ptr<Opm::EclipseWriter> eclWriter(new Opm::EclipseWriter(params,
-                                                                         eclipseState,
-                                                                         phaseUsage,
-                                                                         eclipseState->getEclipseGrid()->getCartesianSize(),
-                                                                         0));
+    Opm::DeckConstPtr     deck = createDeck(eclipse_data_filename);
+    Opm::EclipseStatePtr  eclipseState(new Opm::EclipseState(deck));
+    Opm::EclipseWriterPtr eclipseWriter = createEclipseWriter(deck, eclipseState, eclipse_data_filename);
 
     std::shared_ptr<Opm::SimulatorTimer> simTimer( new Opm::SimulatorTimer() );
     simTimer->init(eclipseState->getSchedule()->getTimeMap());
 
-    auto eclGrid = eclipseState->getEclipseGrid();
+    eclipseWriter->writeInit(*simTimer);
 
-    Opm::EclipseGridConstPtr constEclGrid(eclGrid);
-    std::shared_ptr<Opm::GridManager> ourFineGridManagerPtr(new Opm::GridManager(constEclGrid));
-
-    eclWriter->writeInit(*simTimer);
-
-    std::shared_ptr<Opm::BlackoilState> blackoilState(new Opm::BlackoilState);
-    blackoilState->init(*ourFineGridManagerPtr->c_grid(), 3);
     std::shared_ptr<Opm::WellState> wellState(new Opm::WellState());
+    std::shared_ptr<Opm::BlackoilState> blackoilState = createBlackOilState(eclipseState->getEclipseGrid());
     wellState->init(0, *blackoilState);
 
     int countTimeStep = eclipseState->getSchedule()->getTimeMap()->numTimesteps();
-    for(int i=0; i <= countTimeStep; ++i){
-      simTimer->setCurrentStepNum(i);
-      eclWriter->writeTimeStep(*simTimer, *blackoilState, *wellState);
+
+    for(int timestep=0; timestep <= countTimeStep; ++timestep){
+      simTimer->setCurrentStepNum(timestep);
+      eclipseWriter->writeTimeStep(*simTimer, *blackoilState, *wellState);
     }
 
-    for (int timestep = 0; timestep <= eclipseState->getSchedule()->getTimeMap()->numTimesteps(); ++timestep) {
+    for (int timestep = 0; timestep <= countTimeStep; ++timestep) {
       int numWellsFromSchedule  = eclipseState->getSchedule()->numWells(timestep);
       verifyNumWells(eclipse_restart_filename, timestep, numWellsFromSchedule);
       verifyIwelData(eclipse_restart_filename, timestep);
