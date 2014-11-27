@@ -46,63 +46,63 @@
 #include <string.h>
 
 
-
-
-void verifyIwelData(const std::string&  filename, int timestep, int numWellsReadFromScheduleFile) {
+void verifyNumWells(const std::string&  filename, int timestep, int numWellsFromSchedule){
   ecl_file_type * restart_file = ecl_file_open(filename.c_str(), 0);
   ecl_file_load_all(restart_file);
 
-  ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, timestep);
+  const ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, timestep);
   int numwells = ecl_kw_iget_int(intehead_kw, INTEHEAD_NWELLS_INDEX);
-  BOOST_ASSERT(numWellsReadFromScheduleFile == numwells);
+  BOOST_ASSERT(numWellsFromSchedule == numwells);
 
-  int NIWELZ   = ecl_kw_iget_int(intehead_kw, INTEHEAD_NIWELZ_INDEX);
-  ecl_kw_type * iwel_kw = ecl_file_iget_named_kw(restart_file, IWEL_KW, timestep);
-  int iwel_kw_size = ecl_kw_get_size(iwel_kw);
+  ecl_file_close(restart_file);
+}
+
+
+void verifyIwelData(const std::string& filename, int timestep) {
+  ecl_file_type * restart_file = ecl_file_open(filename.c_str(), 0);
+  ecl_file_load_all(restart_file);
+
+  const ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, timestep);
+  int numwells = ecl_kw_iget_int(intehead_kw, INTEHEAD_NWELLS_INDEX);
+  int NIWELZ = ecl_kw_iget_int(intehead_kw, INTEHEAD_NIWELZ_INDEX);
   int expected_IWEL_data_size = numwells * NIWELZ;
-  BOOST_ASSERT(expected_IWEL_data_size == iwel_kw_size);
+
+  const ecl_kw_type * iwel_kw = ecl_file_iget_named_kw(restart_file, IWEL_KW, timestep);
+  BOOST_ASSERT(expected_IWEL_data_size == ecl_kw_get_size(iwel_kw));
 
   ecl_file_close(restart_file);
 }
 
 
-void verifyZwelData(const std::string&  filename, int timestep, int numWellsReadFromScheduleFile) {
+void verifyZwelData(const std::string&  filename, int timestep) {
   ecl_file_type * restart_file = ecl_file_open(filename.c_str(), 0);
   ecl_file_load_all(restart_file);
 
-  ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, timestep);
+  const ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, timestep);
   int numwells = ecl_kw_iget_int(intehead_kw, INTEHEAD_NWELLS_INDEX);
-  BOOST_ASSERT(numWellsReadFromScheduleFile == numwells);
-
-  int NZWELZ   = ecl_kw_iget_int(intehead_kw, INTEHEAD_NZWELZ_INDEX);
-  ecl_kw_type * zwel_kw = ecl_file_iget_named_kw(restart_file, ZWEL_KW, timestep);
-  int zwel_kw_size = ecl_kw_get_size(zwel_kw);
-
+  int NZWELZ = ecl_kw_iget_int(intehead_kw, INTEHEAD_NZWELZ_INDEX);
   int expected_ZWEL_data_size = numwells * NZWELZ;
-  BOOST_ASSERT(expected_ZWEL_data_size == zwel_kw_size);
 
+  const ecl_kw_type * zwel_kw = ecl_file_iget_named_kw(restart_file, ZWEL_KW, timestep);
+  BOOST_ASSERT(expected_ZWEL_data_size == ecl_kw_get_size(zwel_kw));
 
   ecl_file_close(restart_file);
 }
-
-
 
 
 void  verifyIconData(const std::string&  filename, int timestep) {
   ecl_file_type * restart_file = ecl_file_open(filename.c_str(), 0);
   ecl_file_load_all(restart_file);
 
-  ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, timestep);
+  const ecl_kw_type * intehead_kw = ecl_file_iget_named_kw(restart_file, INTEHEAD_KW, timestep);
   int numwells = ecl_kw_iget_int(intehead_kw, INTEHEAD_NWELLS_INDEX); //Num wells
   int NICONZ   = ecl_kw_iget_int(intehead_kw, INTEHEAD_NICONZ_INDEX); //Num elements per connection element
   int NCWMAX   = ecl_kw_iget_int(intehead_kw, INTEHEAD_NCWMAX_INDEX); //Max number of connections for a well
 
   int expected_ICON_data_size = NICONZ * NCWMAX * numwells;
 
-  ecl_kw_type * icon_kw = ecl_file_iget_named_kw(restart_file, ICON_KW, timestep);
-  int icon_kw_size = ecl_kw_get_size(icon_kw);
-
-  BOOST_ASSERT(expected_ICON_data_size == icon_kw_size);
+  const ecl_kw_type * icon_kw = ecl_file_iget_named_kw(restart_file, ICON_KW, timestep);
+  BOOST_ASSERT(expected_ICON_data_size == ecl_kw_get_size(icon_kw));
 
   ecl_file_close(restart_file);
 }
@@ -116,7 +116,6 @@ BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
 
     test_work_area_type * test_area = test_work_area_alloc("TEST_EclipseWriteNumWells");
     test_work_area_copy_file(test_area, eclipse_data_filename.c_str());
-    test_work_area_set_store(test_area, true);
 
     Opm::ParserPtr parser(new Opm::Parser());
     Opm::ParserLogPtr parserLog(new Opm::ParserLog);
@@ -128,8 +127,6 @@ BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
     params.insertParameter("deck_filename", eclipse_data_filename);
 
     const Opm::PhaseUsage phaseUsage = Opm::phaseUsageFromDeck(deck);
-
-    std::string output_dir(test_work_area_get_cwd(test_area));
 
     std::shared_ptr<Opm::EclipseWriter> eclWriter(new Opm::EclipseWriter(params,
                                                                          eclipseState,
@@ -147,23 +144,24 @@ BOOST_AUTO_TEST_CASE(EclipseWriteNumWells)
 
     eclWriter->writeInit(*simTimer);
 
-    int countTimeStep = eclipseState->getSchedule()->getTimeMap()->numTimesteps();
-
     std::shared_ptr<Opm::BlackoilState> blackoilState(new Opm::BlackoilState);
     blackoilState->init(*ourFineGridManagerPtr->c_grid(), 3);
     std::shared_ptr<Opm::WellState> wellState(new Opm::WellState());
     wellState->init(0, *blackoilState);
 
+    int countTimeStep = eclipseState->getSchedule()->getTimeMap()->numTimesteps();
     for(int i=0; i <= countTimeStep; ++i){
       simTimer->setCurrentStepNum(i);
       eclWriter->writeTimeStep(*simTimer, *blackoilState, *wellState);
     }
 
-    for (size_t timestep = 0; timestep <= eclipseState->getSchedule()->getTimeMap()->numTimesteps(); ++timestep) {
-      int numWellsReadFromScheduleFile  = eclipseState->getSchedule()->numWells(timestep);
-      verifyIwelData(eclipse_restart_filename, timestep, numWellsReadFromScheduleFile);
-      verifyZwelData(eclipse_restart_filename, timestep, numWellsReadFromScheduleFile);
+    for (int timestep = 0; timestep <= eclipseState->getSchedule()->getTimeMap()->numTimesteps(); ++timestep) {
+      int numWellsFromSchedule  = eclipseState->getSchedule()->numWells(timestep);
+      verifyNumWells(eclipse_restart_filename, timestep, numWellsFromSchedule);
+      verifyIwelData(eclipse_restart_filename, timestep);
+      verifyZwelData(eclipse_restart_filename, timestep);
       verifyIconData(eclipse_restart_filename, timestep);
     }
+
     test_work_area_free(test_area);
 }
