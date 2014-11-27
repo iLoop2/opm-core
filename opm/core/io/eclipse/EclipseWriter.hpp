@@ -66,7 +66,8 @@ public:
                   Opm::EclipseStateConstPtr eclipseState,
                   const Opm::PhaseUsage &phaseUsage,
                   int numCells,
-                  const int* compressedToCartesianCellIdx);
+                  const int* compressedToCartesianCellIdx,
+                  std::string output_dir = ".");
 
     /**
      * We need a destructor in the compilation unit to avoid the

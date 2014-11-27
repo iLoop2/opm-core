@@ -145,6 +145,27 @@ static int ertPhaseMask(const PhaseUsage uses)
         | (uses.phase_used[BlackoilPhases::Vapour] ? ECL_GAS_PHASE : 0);
 }
 
+//Convert OPM injector type enum to ERT injector type
+static int ertInjectorTypeMask(int injectorType) {
+  int ert_injector_type = 0;
+
+  switch (injectorType) {
+    case 1 :  // WATER injection
+      ert_injector_type = 3;
+      break;
+    case 2 :  // GAS injection
+      ert_injector_type = 4;
+      break;
+    case 3 : // OIL injection
+      ert_injector_type = 2;
+  }
+
+  return ert_injector_type;
+ }
+
+
+
+
 /**
  * Eclipse "keyword" (i.e. named data) for a vector.
  */
@@ -308,8 +329,8 @@ public:
 
       iwel_data.push_back(well_ptr->getHeadI()); // item 1 - gridhead I value
       iwel_data.push_back(well_ptr->getHeadJ()); // item 2 - gridhead J value
-      iwel_data.push_back(0);                // item 3 - gridhead K value
-      iwel_data.push_back(0);                // item 4 - undefined - 0
+      iwel_data.push_back(0);                    // item 3 - gridhead K value
+      iwel_data.push_back(0);                    // item 4 - undefined - 0
 
       CompletionSetConstPtr completions_ptr = well_ptr->getCompletions(currentStep);
       int num_completions = completions_ptr->size();
@@ -317,24 +338,10 @@ public:
       iwel_data.push_back(1);                    // item 6 - for now, set all group indexes to 1
 
 
-      // item 7 - well type 1 = producer, 2 = oil injection, 3 = water injection, 4 = gas injection
       if (well_ptr->isProducer(currentStep)) {
         iwel_data.push_back(1);
       } else {
-          WellInjectionProperties well_injection_props = well_ptr->getInjectionProperties(currentStep);
-
-          switch (well_injection_props.injectorType) {
-            case 1 :  // WATER injection
-              iwel_data.push_back(3);
-              break;
-            case 2 :  // GAS injection
-              iwel_data.push_back(4);
-              break;
-            case 3 : // OIL injection
-              iwel_data.push_back(2);
-            default:
-               iwel_data.push_back(0);
-          }
+          iwel_data.push_back(ertInjectorTypeMask(well_ptr->getInjectionProperties(currentStep).injectorType));
       }
 
       iwel_data.push_back(0);                    // item 8  -  undefined  - 0
@@ -346,8 +353,6 @@ public:
       } else { // OPEN = 1, STOP = 2, AUTO = 4
         iwel_data.push_back(1);//OPEN
       }
-
-
     }
 
 
@@ -362,7 +367,6 @@ public:
       CompletionSetConstPtr completions_set_ptr = well_ptr->getCompletions(currentstep);
 
       int zero_pad = ncwmax - completions_set_ptr->size();
-
 
       for (int i = 0; i < completions_set_ptr->size(); ++i) {
         CompletionConstPtr completion_ptr = completions_set_ptr->get(i);
@@ -1100,16 +1104,9 @@ void EclipseWriter::writeTimeStep(const SimulatorTimer& timer,
                               reportStepIdx_,
                               ih_data);
 
-    if(ih_data.niwelz!=0){
-      restartHandle.add_kw(EclipseWriterDetails::Keyword<int>(IWEL_KW, iwell_data));
-    }
-    if(ih_data.nzwelz!=0){
-      restartHandle.add_kw(EclipseWriterDetails::Keyword<const char *>(ZWEL_KW, zwell_data));
-    }
-    if(ih_data.niconz!=0){
-      restartHandle.add_kw(EclipseWriterDetails::Keyword<int>(ICON_KW, icon_data));
-    }
-
+    restartHandle.add_kw(EclipseWriterDetails::Keyword<int>(IWEL_KW, iwell_data));
+    restartHandle.add_kw(EclipseWriterDetails::Keyword<const char *>(ZWEL_KW, zwell_data));
+    restartHandle.add_kw(EclipseWriterDetails::Keyword<int>(ICON_KW, icon_data));
 
     EclipseWriterDetails::Solution sol(restartHandle);
 
@@ -1123,7 +1120,7 @@ void EclipseWriter::writeTimeStep(const SimulatorTimer& timer,
     std::vector<double> tmp = reservoirState.pressure();
     EclipseWriterDetails::convertFromSiTo(tmp, deckToSiPressure_);
 
-    //sol.add(EclipseWriterDetails::Keyword<float>("PRESSURE", tmp));
+    sol.add(EclipseWriterDetails::Keyword<float>("PRESSURE", tmp));
 
     for (int phase = 0; phase != BlackoilPhases::MaxNumPhases; ++phase) {
         // Eclipse never writes the oil saturation, so all post-processors
@@ -1163,11 +1160,13 @@ EclipseWriter::EclipseWriter(const parameter::ParameterGroup& params,
                              Opm::EclipseStateConstPtr eclipseState,
                              const Opm::PhaseUsage &phaseUsage,
                              int numCells,
-                             const int* compressedToCartesianCellIdx)
+                             const int* compressedToCartesianCellIdx,
+                             std::string outputDir)
     : eclipseState_(eclipseState)
     , numCells_(numCells)
     , compressedToCartesianCellIdx_(compressedToCartesianCellIdx)
     , phaseUsage_(phaseUsage)
+    , outputDir_(outputDir)
 {
     const auto eclGrid = eclipseState->getEclipseGrid();
     cartesianSize_[0] = eclGrid->getNX();
