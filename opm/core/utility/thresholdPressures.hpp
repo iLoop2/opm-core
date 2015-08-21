@@ -46,17 +46,14 @@ namespace Opm
 
 
     template <class Grid>
-    std::vector<double> thresholdPressures(const ParseMode& parseMode ,EclipseStateConstPtr eclipseState, const Grid& grid)
+    std::vector<double> thresholdPressures(const ParseMode& parseMode, EclipseStateConstPtr eclipseState, const Grid& grid)
     {
         SimulationConfigConstPtr simulationConfig = eclipseState->getSimulationConfig();
-        const std::vector<double>& thresholdPressureTable;
-        if(simulationConfig->hasThresholdPressure()){
-           thresholdPressureTable = simulationConfig->getThresholdPressureTable();
-        }else{
+        if (simulationConfig->hasThresholdPressure()==false) {
             std::string msg = "Inferring threshold pressure from the initial state is not supported.";
             parseMode.handleError( ParseMode::UNSUPPORTED_INITIAL_THPRES , msg );
         }
-
+        const std::vector<double>& thresholdPressureTable = simulationConfig->getThresholdPressureTable();
         std::vector<double> thpres_vals;
 
         if (thresholdPressureTable.size() > 0) {
@@ -83,6 +80,7 @@ namespace Opm
             }
         }
         return thpres_vals;
+
     }
 }
 
